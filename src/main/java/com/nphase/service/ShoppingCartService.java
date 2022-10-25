@@ -68,19 +68,29 @@ public class ShoppingCartService {
                 })
                 .map(product -> {
                     if(product.getQuantity() > 3) {
-                        return BigDecimal.valueOf(product.getQuantity() * 0.9).setScale(2, RoundingMode.HALF_UP);
+                        product.setTotalPrice(product.getTotalPrice().multiply(BigDecimal.valueOf(0.9)).setScale(2, RoundingMode.HALF_UP));
                     }
                     return product.getTotalPrice();})
                 .reduce(BigDecimal::add)
                 .orElse(BigDecimal.ZERO);
     }
 
-    public void shoppingCartConfigure() {
-
+    public void addProduct(Product product) {
+        productsCartRepository.add(product);
     }
 
-    public BigDecimal calculateTotalPriceWithCategoryDiscountConfigurableDiscount(ShoppingCart shoppingCart, double quantityDiscount, double categoryDiscount) {
+    public void removeProduct(Product product) {
+        productsCartRepository.delete(product);
+    }
+
+    public BigDecimal calculateTotalPriceWithCategoryDiscountConfigurableDiscount(ShoppingCart shoppingCart, double quantityDiscountValue,  double categoryDiscountValue) {
         List<Product> productList = new ArrayList<>(shoppingCart.getProducts());
+
+        int totalProducts = productList.stream().map(Product::getQuantity).reduce(0, Integer::sum);
+
+        if(totalProducts < 3) {
+            return  calculateTotalPrice(shoppingCart);
+        }
 
         Set<Category> categoriesSet = productList.stream().map(Product::getCategory).collect(Collectors.toSet());
 
@@ -88,10 +98,10 @@ public class ShoppingCartService {
                 .map(category -> {
                     int amount = productList.stream().filter(p -> p.getCategory() == category)
                             .map(Product::getQuantity)
-                            .reduce(0, (a, b) -> a + b);
+                            .reduce(0, Integer::sum);
 
-                    boolean isCategoryDiscount = amount > 3;
-                    return new ProductsCategoryInfo(category, isCategoryDiscount);
+                    boolean categoryDiscountQualification = amount > 3;
+                    return new ProductsCategoryInfo(category, categoryDiscountQualification);
                 })
                 .collect(Collectors.toMap(ProductsCategoryInfo::getCategory, ProductsCategoryInfo::isCategoryDiscount));
 
@@ -99,18 +109,21 @@ public class ShoppingCartService {
                 .stream()
                 .map(product -> {
                     if(categoryDiscountMap.get(product.getCategory())) {
-                        product.setTotalPrice(product.getTotalPrice().multiply(BigDecimal.valueOf(0.9)).setScale(2, RoundingMode.HALF_UP));
+                        product.setTotalPrice(product.getTotalPrice().multiply(BigDecimal.valueOf(categoryDiscountValue)).setScale(2, RoundingMode.HALF_UP));
                         return product;
                     }
                     return product;
                 })
                 .map(product -> {
                     if(product.getQuantity() > 3) {
-                        return BigDecimal.valueOf(product.getQuantity() * 0.9).setScale(2, RoundingMode.HALF_UP);
+                        product.setTotalPrice(product.getTotalPrice().multiply(BigDecimal.valueOf(quantityDiscountValue)).setScale(2, RoundingMode.HALF_UP));
                     }
                     return product.getTotalPrice();})
                 .reduce(BigDecimal::add)
                 .orElse(BigDecimal.ZERO);
     }
 
+    public ProductsCartRepository getProductsCartRepository() {
+        return productsCartRepository;
+    }
 }
